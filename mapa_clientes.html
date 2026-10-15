@@ -31,6 +31,11 @@
     <button type="button" id="btnZoom" style="display:none;margin-left:auto;padding:5px 10px;border:0;border-radius:8px;background:#1F7A5C;color:#fff;font:inherit;font-weight:800;font-size:12px;cursor:pointer;white-space:nowrap">🔍 Ampliar</button>
   </div>
   <p>3447 clientes · 513 mudam de vendedor · localização pelo bairro · gerado em 07/10/2026 22:36</p>
+  <form id="formBusca" style="display:flex;gap:6px;margin:0 0 8px">
+    <input id="txtBusca" type="search" inputmode="search" placeholder="Buscar cliente: código ou nome" style="flex:1;min-width:0;padding:7px 9px;border:1px solid rgba(127,127,127,.45);border-radius:8px;font:inherit;background:var(--card);color:var(--ink)">
+    <button type="submit" style="padding:6px 12px;border:0;border-radius:8px;background:#1D6FB8;color:#fff;font:inherit;font-weight:800;cursor:pointer">Buscar</button>
+  </form>
+  <div id="resBusca" style="display:none;font-size:12.5px;margin:-2px 0 8px"></div>
   <div id="infoVend" style="font-size:12.5px;margin:0 0 8px;padding:8px 10px;border-radius:10px;background:rgba(29,154,93,.08);border:1px solid rgba(29,154,93,.35);display:none"></div>
   <label><input type="checkbox" id="chkCalor" checked> <span id="lblCalor">Mapa de calor (todos os clientes)</span></label>
   <label><input type="checkbox" id="chkPinos" checked> Pinos dos clientes que mudam</label>
@@ -231,6 +236,38 @@ function finalizar() {
 }
 let ultimoVend = null;
 document.querySelector(".painel").addEventListener("change", aplicar);
+// Busca de cliente pelo código (ou parte do nome)
+const grupoBusca = L.layerGroup().addTo(mapa);
+const nomeVend = c => { const v = VENDEDORES.find(x => x.cod === c); return v ? `${v.cod} ${v.nome}` : String(c); };
+function mostrarCliente(t) {
+  grupoBusca.clearLayers();
+  const muda = t[2] !== t[3];
+  const txt = `<b>${t[4]}</b><br>${t[5]}<br>` +
+    (muda ? `<span style="color:#C23B3B">Hoje:</span> ${nomeVend(t[3])}<br><span style="color:#1D9A5D">Vai para:</span> <b>${nomeVend(t[2])}</b>`
+          : `Vendedor: <b>${nomeVend(t[2])}</b> (não muda)`) +
+    `<br>Faturamento: <b>${brl(t[6])}</b>` +
+    (t[7] === "cidade" ? "<br><i>localização aproximada (centro da cidade)</i>" : "<br><i>localização aproximada pelo bairro</i>");
+  L.circleMarker([t[0], t[1]], { radius: 14, color: "#1D6FB8", weight: 4, fillColor: "#1D6FB8", fillOpacity: 0.25 }).addTo(grupoBusca);
+  L.marker([t[0], t[1]]).bindPopup(txt).addTo(grupoBusca).openPopup();
+  mapa.setView([t[0], t[1]], 15);
+}
+document.getElementById("formBusca").addEventListener("submit", ev => {
+  ev.preventDefault();
+  const q = document.getElementById("txtBusca").value.trim();
+  const res = document.getElementById("resBusca");
+  grupoBusca.clearLayers();
+  if (!q) { res.style.display = "none"; return; }
+  let achados;
+  if (/^\d+$/.test(q)) achados = TODOS.filter(t => String(t[4]).split(" - ")[0].trim() === q);
+  else { const u = q.toUpperCase(); achados = TODOS.filter(t => String(t[4]).toUpperCase().includes(u)); }
+  res.style.display = "block";
+  if (!achados.length) { res.innerHTML = `<span style="color:#C23B3B;font-weight:700">Cliente "${q}" não encontrado no mapa.</span>`; return; }
+  if (achados.length === 1) { res.innerHTML = ""; res.style.display = "none"; mostrarCliente(achados[0]); return; }
+  res.innerHTML = `<div style="color:var(--soft);margin-bottom:3px">${achados.length} clientes encontrados${achados.length > 15 ? " (mostrando 15)" : ""}:</div>` +
+    achados.slice(0, 15).map((t, i) => `<a href="#" data-i="${i}" style="display:block;color:#1D6FB8;text-decoration:none;padding:2px 0;font-weight:600">${t[4]}</a>`).join("");
+  res.querySelectorAll("a").forEach(a => a.addEventListener("click", e => { e.preventDefault(); mostrarCliente(achados[Number(a.dataset.i)]); }));
+});
+
 // Botão "Ampliar": mostra o quadro do(s) vendedor(es) grande, no meio da tela
 const zoomBox = document.createElement("div");
 zoomBox.style.cssText = "position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;padding:20px";
